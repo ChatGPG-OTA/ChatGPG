@@ -7,6 +7,9 @@ ChatGPG is an **air-gapped**, SeedSigner-inspired application for:
 - Running on **Raspberry Pi Zero 1.3** + **Waveshare 1.3” 240×240 LCD** + **ZeroCam**
 - Running and testing on **desktop** using webcam and virtual display emulator
 
+## Sequence Diagram
+![Sequence Diagram](diagram.svg)
+
 ---
 
 ## Project structure
