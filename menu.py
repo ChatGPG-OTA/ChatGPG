@@ -165,6 +165,34 @@ def scan_menu(display, gpg, settings):
         input("Press Enter to go back...")
         return
 
+    # Unsigned encrypted message (ready to sign if we are recipient)
+    if result["type"] == "encrypted_unsigned":
+        display.text("Decrypted unsigned message.")
+        if result.get("is_recipient"):
+            display.text("You are the RECIPIENT.")
+            display.text("You may sign this message if you are the author.")
+            choice = input("Sign message? (y/n): ").strip().lower()
+            if choice == "y":
+                keys = gpg.list_keys()
+                for k in keys:
+                    meta = gpg.keys[k]
+                    label = f"{meta['name']} <{meta['email']}>"
+                    display.text(f"- {k} | {label}")
+                choice = input("Sign with key (last 8 chars): ").strip()
+                res_sign = gpg.sign_message(result["plaintext"], choice, passphrase=None)
+                display.clear()
+                if res_sign:
+                    display.text("Message signed successfully.")
+                    from qr_utils import qr_animate
+                    qr_animate(display, res_sign)
+                    display.text("Signed QR ready for scanning.")
+                else:
+                    display.text("Signing failed.")
+        else:
+            display.text("You are not a recipient for this message.")
+        input("Press Enter to go back...")
+        return
+
     # Fallback
     display.text("Unknown message type.")
     if result.get("warning"):
