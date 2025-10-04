@@ -305,7 +305,7 @@ class EphemeralGPG:
             if "BEGIN PGP MESSAGE" in signed_payload and self.keys:
                 pw = ask_passphrase_fn("Enter passphrase (or empty): ")
                 dec = self.decrypt(signed_payload, passphrase=pw or None)
-                print(dec)
+                # print(dec)
 
                 if dec["ok"]:
                     out["is_recipient"] = True

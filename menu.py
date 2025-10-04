@@ -17,6 +17,7 @@ Features:
 
 from time import sleep
 from textwrap import shorten
+import getpass
 
 
 # ========== MAIN MENU ==========
@@ -49,6 +50,11 @@ def main_menu(display, gpg, settings):
         else:
             display.text("Invalid option.")
 
+def safe_ask_passphrase(prompt: str) -> str:
+    try:
+        return getpass.getpass(prompt)
+    except (KeyboardInterrupt, EOFError):
+        return ""
 
 # ========== SCAN MENU ==========
 
@@ -86,8 +92,8 @@ def scan_menu(display, gpg, settings):
         return
 
     # --- Message handling ---
-    result = gpg.process_scanned(data, ask_passphrase_fn=input)
-    print(result)
+    result = gpg.process_scanned(data, ask_passphrase_fn=safe_ask_passphrase)
+    # print(result)
     display.clear()
 
     # Show decrypted/plain preview if any
@@ -144,7 +150,7 @@ def scan_menu(display, gpg, settings):
 
                 try:
                     # IMPORTANT: sign the ORIGINAL encrypted blob to keep recipients
-                    signed_blob = gpg.sign_ciphertext(data, signer, ask_passphrase_fn=input)
+                    signed_blob = gpg.sign_ciphertext(data, signer, ask_passphrase_fn=safe_ask_passphrase)
                 except Exception as e:
                     display.text(f"Signing failed: {e}")
                     input("Press Enter to go back...")
