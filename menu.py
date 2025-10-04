@@ -193,6 +193,19 @@ def scan_menu(display, gpg, settings):
         input("Press Enter to go back...")
         return
 
+    # Signed message (clearsigned)
+    if result["type"] in ("signed", "clearsigned"):
+        display.text("Signed message detected.")
+        if result.get("signer_fpr"):
+            display.text(f"Signer: ...{result['signer_fpr'][-8:]}")
+        if result.get("signature_valid") is not None:
+            valid = "(valid)" if result["signature_valid"] else "(invalid)"
+            display.text(f"Signature: {valid}")
+        if result.get("warning"):
+            display.text(result["warning"])
+        input("Press Enter to go back...")
+        return
+
     # Fallback
     display.text("Unknown message type.")
     if result.get("warning"):
