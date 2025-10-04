@@ -1,6 +1,6 @@
-# Pi-GPG — Ephemeral GPG Signer for Raspberry Pi Zero
+# ChatGPG — Ephemeral GPG Signer for Raspberry Pi Zero
 
-Pi-GPG is an **air-gapped**, SeedSigner-inspired application for:
+ChatGPG is an **air-gapped**, SeedSigner-inspired application for:
 - Managing **ephemeral GPG keys** (stored only in RAM)
 - Offline message signing
 - Transferring data through **QR codes** (chunked / animated)
@@ -9,69 +9,70 @@ Pi-GPG is an **air-gapped**, SeedSigner-inspired application for:
 
 ---
 
-## ⚙️ Project structure
+## Project structure
 
 ```
 pi-gpg/
-├── main.py              # Main UI: Scan / Keys / Settings
-├── gpg_ephemeral.py     # Ephemeral in-memory GPG logic
-├── camera_qr.py         # QR scanning: ZeroCam / Desktop webcam
-├── qr_utils.py          # QR code generation and animation
-├── display.py           # Display driver: ST7789 or VirtualGPIO
-├── state.py             # Persistent settings (display / camera)
-├── requirements.txt     # Dependencies for Raspberry Pi
-├── requirements-lite.txt# Dependencies for desktop emulator
+├── camera_qr.py          # QR scanning: ZeroCam / Desktop webcam
+├── display.py            # Display driver: ST7789 or VirtualGPIO
+├── gpg_ephemeral.py      # Ephemeral in-memory GPG logic
+├── menu.py               # Menu system: Scan / Keys / Settings
+├── main.py               # Entry point — initializes system and starts main_menu()
+├── qr_utils.py           # QR code generation and animation
+├── state.py              # Persistent settings (display / camera)
+├── requirements.txt      # Dependencies for Raspberry Pi
+├── requirements-lite.txt # Dependencies for desktop emulator
 └── README.md
 ```
 
 ---
 
-## 🧰 1. Installation (with virtual environment)
+## 1. Installation (with virtual environment)
 
-### 🔹 Create and activate a virtual environment
+### Create and activate a virtual environment
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 🔹 Upgrade pip
+### Upgrade pip
 ```bash
 pip install --upgrade pip
 ```
 
 ---
 
-## 💻 2. Desktop installation (emulator + webcam)
+## 2. Desktop installation (emulator + webcam)
 
-### 🔧 System dependencies
+### System dependencies
 ```bash
 sudo apt update
 sudo apt install -y libzbar0
 ```
 
-### 📦 Python packages
+### Python packages
 ```bash
 pip install -r requirements-lite.txt
 ```
 
 ---
 
-## 🍓 3. Raspberry Pi Zero installation (real hardware)
+## 3. Raspberry Pi Zero installation (real hardware)
 
-### 🔧 System dependencies
+### System dependencies
 ```bash
 sudo apt update
 sudo apt install -y libcap-dev libzbar0 python3-picamera2 python3-zbar
 ```
 
-### 📦 Python packages
+### Python packages
 ```bash
 pip install -r requirements.txt
 ```
 
 ---
 
-## ⚙️ 4. Initial configuration
+## 4. Initial configuration
 
 On first run, the app creates a temporary settings file:
 ```
@@ -90,7 +91,7 @@ You can later change these from the `Settings` menu.
 
 ---
 
-## 🚀 5. Running the app
+## 5. Running the app
 
 ```bash
 source venv/bin/activate
@@ -99,9 +100,9 @@ python3 main.py
 
 ---
 
-## 🕹️ 6. Navigation
+## 6. Navigation
 
-### 🔸 Main menu
+### Main menu
 ```
 == PI-GPG ==
 [1] Scan
@@ -117,7 +118,7 @@ python3 main.py
 
 ---
 
-## 🔒 7. Security
+## 7. Security
 
 - Private keys are **ephemeral**, kept only in memory.  
 - When you power off the Pi or close the app, **keys are destroyed**.  
@@ -125,7 +126,7 @@ python3 main.py
 
 ---
 
-## 📸 8. Camera selection
+## 8. Camera selection
 
 - `Desktop` — uses **webcam** via OpenCV + pyzbar  
 - `ZeroCam` — uses **Pi Zero camera** via Picamera2 + zbarlight  
@@ -138,7 +139,7 @@ Camera source: Desktop
 
 ---
 
-## 💡 9. Quick desktop test
+## 9. Quick desktop test
 
 1. Run:
    ```bash
@@ -150,7 +151,7 @@ Camera source: Desktop
 
 ---
 
-## 🧩 10. Developer notes
+## 10. Developer notes
 
 To run on **real Pi hardware** with the ST7789 LCD:
 - Enable SPI via `sudo raspi-config`
@@ -165,7 +166,7 @@ ST7789 display logic is in `display.py` (you can adapt it using the `luma.lcd` l
 
 ---
 
-## 🧹 11. Clean up / reset
+## 11. Clean up / reset
 
 ```bash
 deactivate
@@ -175,7 +176,7 @@ rm /dev/shm/pi_gpg_settings.json
 
 ---
 
-## 🧠 12. Minimum hardware requirements
+## 12. Minimum hardware requirements
 
 | Component | Minimum recommended |
 |------------|----------------------|
@@ -187,7 +188,7 @@ rm /dev/shm/pi_gpg_settings.json
 
 ---
 
-## 🏁 13. License
+## 13. License
 
 MIT © 2025 — Educational demo project, provided without warranty.  
 Use for real GPG signing at your own risk.

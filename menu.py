@@ -25,7 +25,7 @@ def main_menu(display, gpg, settings):
     """Main menu navigation."""
     while True:
         display.clear()
-        display.text("🏠 ChatGPG Main Menu")
+        display.text("ChatGPG Main Menu")
         display.text("1) Scan Message / Key")
         display.text("2) Manage Keys")
         display.text("3) Settings")
@@ -39,7 +39,7 @@ def main_menu(display, gpg, settings):
         elif choice == "3":
             settings_menu(display, settings)
         elif choice == "4":
-            display.text("👋 Bye! Wiping ephemeral memory...")
+            display.text("Bye! Wiping ephemeral memory...")
             try:
                 gpg._cleanup()
             except Exception as e:
@@ -47,7 +47,7 @@ def main_menu(display, gpg, settings):
             sleep(1)
             break
         else:
-            display.text("❌ Invalid option.")
+            display.text("Invalid option.")
 
 
 # ========== SCAN MENU ==========
@@ -67,15 +67,15 @@ def scan_menu(display, gpg, settings):
         data = scan_qr_from_zerocam_continuous()
 
     if not data:
-        display.text("❌ No QR detected.")
+        display.text("No QR detected.")
         sleep(1)
         return
 
     # --- Key import (private only) ---
     if "PRIVATE KEY BLOCK" in data:
-        display.text("🔑 Importing private key...")
+        display.text("Importing private key...")
         gpg.import_private_key(data)
-        display.text("✅ Private key imported successfully.")
+        display.text("Private key imported successfully.")
         sleep(1.5)
         return
 
@@ -86,33 +86,33 @@ def scan_menu(display, gpg, settings):
 
     # ---- Summary display ----
     if result.get("author_fpr"):
-        display.text(f"✍️ Author: ...{result['author_fpr'][-8:]}")
+        display.text(f"Author: ...{result['author_fpr'][-8:]}")
 
     if result.get("recipients"):
         rec_str = ", ".join(f"...{fp[-8:]}" for fp in result["recipients"])
-        display.text(f"📫 Recipients: {rec_str}")
+        display.text(f"Recipients: {rec_str}")
 
     if result.get("is_author"):
-        display.text("👤 You are the AUTHOR.")
+        display.text("You are the AUTHOR.")
     if result.get("is_recipient"):
-        display.text("📩 You are a RECIPIENT.")
+        display.text("You are a RECIPIENT.")
 
     # Show decrypted or plain text preview
     if result.get("plaintext"):
         preview = shorten(result["plaintext"].strip(), width=100, placeholder="…")
-        display.text("💬 Message Preview:")
+        display.text("Message Preview:")
         display.text(preview)
         print("\n--- FULL DECRYPTED MESSAGE ---\n")
         print(result["plaintext"])
         print("\n------------------------------\n")
 
     # ---- Decision tree ----
-    # 1️⃣ If message should be signed (we are author)
+    # If message should be signed (we are author)
     if result.get("should_sign"):
-        display.text("📝 Ready to sign this message.")
+        display.text("Ready to sign this message.")
         keys = gpg.list_keys()
         if not keys:
-            display.text("⚠️ No private keys available.")
+            display.text("No private keys available.")
             input("Press Enter...")
             return
 
@@ -125,48 +125,48 @@ def scan_menu(display, gpg, settings):
         res_sign = gpg.sign_unsigned_message(result["plaintext"], choice, ask_passphrase_fn=input)
         display.clear()
         if res_sign["ok"]:
-            display.text("✅ Message signed successfully.")
+            display.text("Message signed successfully.")
             from qr_utils import qr_animate
             qr_animate(display, res_sign["signed_armored"])
-            display.text("📤 Signed QR ready for scanning.")
+            display.text("Signed QR ready for scanning.")
         else:
-            display.text(f"❌ {res_sign['status']}")
+            display.text(f"{res_sign['status']}")
             if res_sign.get("warning"):
                 display.text(res_sign["warning"])
         input("Press Enter to go back...")
         return
 
-    # 2️⃣ Signed message (verify)
+    # Signed message (verify)
     if result["type"] in ("clearsigned", "encrypted_signed"):
-        display.text("📜 Signed message detected.")
+        display.text("Signed message detected.")
         if result["signer_fpr"]:
-            display.text(f"✍️ Signer: ...{result['signer_fpr'][-8:]}")
+            display.text(f"Signer: ...{result['signer_fpr'][-8:]}")
         if result["signature_valid"] is not None:
-            valid = "✅" if result["signature_valid"] else "❌"
+            valid = "(yes)" if result["signature_valid"] else "(no)"
             display.text(f"Signature: {valid}")
         if result.get("warning"):
             display.text(result["warning"])
         input("Press Enter to go back...")
         return
 
-    # 3️⃣ Encrypted but cannot decrypt
+    # Encrypted but cannot decrypt
     if result["type"] == "encrypted" and not result.get("plaintext"):
-        display.text("🔒 Encrypted message (cannot decrypt).")
+        display.text("Encrypted message (cannot decrypt).")
         if result.get("warning"):
             display.text(result["warning"])
         input("Press Enter to go back...")
         return
 
-    # 4️⃣ Plain unsigned message (not ours)
+    # Plain unsigned message (not ours)
     if result["type"] == "unsigned" and not result.get("should_sign"):
-        display.text("📄 Plain unsigned message.")
+        display.text("Plain unsigned message.")
         if result.get("warning"):
             display.text(result["warning"])
         input("Press Enter to go back...")
         return
 
-    # 5️⃣ Fallback
-    display.text("⚠️ Unknown message type.")
+    # Fallback
+    display.text("Unknown message type.")
     if result.get("warning"):
         display.text(result["warning"])
     input("Press Enter to go back...")
@@ -178,7 +178,7 @@ def keys_menu(display, gpg):
     """Show key management options."""
     while True:
         display.clear()
-        display.text("🔑 Keys Menu")
+        display.text("Keys Menu")
         display.text("1) List Keys")
         display.text("2) Generate New Key")
         display.text("3) ⬅ Back")
@@ -199,17 +199,17 @@ def keys_menu(display, gpg):
             name = input("Name: ")
             email = input("Email: ")
             pw = input("Passphrase (optional): ") or None
-            display.text("⏳ Generating keypair...")
+            display.text("Generating keypair...")
             fpr = gpg.generate_key(name, email, pw)
             if fpr:
-                display.text(f"✅ Key created: ...{fpr[-8:]}")
+                display.text(f"Key created: ...{fpr[-8:]}")
             else:
-                display.text("❌ Key generation failed.")
+                display.text("Key generation failed.")
             input("Press Enter...")
         elif choice in ("3", "b", "B"):
             return
         else:
-            display.text("❌ Invalid option.")
+            display.text("Invalid option.")
 
 
 # ========== SETTINGS MENU ==========
@@ -235,12 +235,12 @@ def settings_menu(display, settings):
             display.clear()
             display.text("ChatGPG v0.3")
             display.text("Ephemeral GPG signer")
-            display.text("By Razvan 🧠⚡")
+            display.text("By Razvan")
             input("Press Enter to go back.")
         elif choice in ("4", "b", "B"):
             return
         else:
-            display.text("❌ Invalid option.")
+            display.text("Invalid option.")
 
 
 # ========== DISPLAY SETTINGS ==========
@@ -248,7 +248,7 @@ def settings_menu(display, settings):
 def display_settings_menu(display, settings):
     while True:
         display.clear()
-        display.text("🖥 Display Settings")
+        display.text("isplay Settings")
         display.text(f"Current: {settings['display_type']}")
         display.text("1) ST7789 (real)")
         display.text("2) Virtual (desktop)")
@@ -257,16 +257,16 @@ def display_settings_menu(display, settings):
 
         if choice == "1":
             settings["display_type"] = "st7789"
-            display.text("✅ Using ST7789.")
+            display.text("Using ST7789.")
             sleep(1)
         elif choice == "2":
             settings["display_type"] = "virtual"
-            display.text("✅ Using Virtual Display.")
+            display.text("Using Virtual Display.")
             sleep(1)
         elif choice in ("3", "b", "B"):
             return
         else:
-            display.text("❌ Invalid option.")
+            display.text("Invalid option.")
 
 
 # ========== CAMERA SETTINGS ==========
@@ -274,7 +274,7 @@ def display_settings_menu(display, settings):
 def camera_settings_menu(display, settings):
     while True:
         display.clear()
-        display.text("📷 Camera Settings")
+        display.text("Camera Settings")
         display.text(f"Current: {settings['camera_type']}")
         display.text("1) Pi Camera (ZeroCam)")
         display.text("2) Desktop Webcam")
@@ -283,13 +283,13 @@ def camera_settings_menu(display, settings):
 
         if choice == "1":
             settings["camera_type"] = "picam"
-            display.text("✅ Using Pi Camera.")
+            display.text("Using Pi Camera.")
             sleep(1)
         elif choice == "2":
             settings["camera_type"] = "webcam"
-            display.text("✅ Using Desktop Webcam.")
+            display.text("Using Desktop Webcam.")
             sleep(1)
         elif choice in ("3", "b", "B"):
             return
         else:
-            display.text("❌ Invalid option.")
+            display.text("Invalid option.")

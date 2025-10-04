@@ -254,9 +254,9 @@ class EphemeralGPG:
             if out["signer_fpr"]:
                 ok = any(_endswith8(out["signer_fpr"], fp) for fp in out["expected_fprs"]) if out["expected_fprs"] else True
                 if not ok:
-                    out["warning"] = "⚠️ signer not in recipients list"
+                    out["warning"] = "signer not in recipients list"
             elif not v["valid"]:
-                out["warning"] = "⚠️ invalid signature"
+                out["warning"] = "invalid signature"
             return out
 
         # 2) Encrypted (possibly containing signed message)
@@ -266,7 +266,7 @@ class EphemeralGPG:
             # If no private keys loaded -> cannot decrypt (and do not ask passphrase)
             if not self.keys:
                 out["status"] = "No private keys loaded; cannot decrypt message."
-                out["warning"] = "⚠️ Encrypted message but no private keys present."
+                out["warning"] = "Encrypted message but no private keys present."
                 return out
 
             # Attempt decrypt (first without passphrase)
@@ -279,7 +279,7 @@ class EphemeralGPG:
                         dec_res = self.decrypt(armored_text, passphrase=pw)
 
             if not dec_res["ok"]:
-                out["warning"] = "❌ Cannot decrypt message."
+                out["warning"] = "Cannot decrypt message."
                 out["status"] = dec_res["status"]
                 return out
 
@@ -311,7 +311,7 @@ class EphemeralGPG:
                 if out["expected_fprs"] and out["signer_fpr"]:
                     ok = any(_endswith8(out["signer_fpr"], fp) for fp in out["expected_fprs"])
                     if not ok:
-                        out["warning"] = "⚠️ signer not among recipients"
+                        out["warning"] = "signer not among recipients"
             else:
                 # Decrypted unsigned payload → candidate for signing if we're the author
                 out["type"] = "encrypted_unsigned"
@@ -340,7 +340,7 @@ class EphemeralGPG:
         # 4) Unknown
         out["type"] = "unknown"
         out["plaintext"] = armored_text
-        out["warning"] = "⚠️ Unknown PGP block"
+        out["warning"] = "Unknown PGP block"
         return out
 
     # =========================
@@ -365,20 +365,20 @@ class EphemeralGPG:
         author_fpr = meta["author_fpr"]
         if not author_fpr:
             res["status"] = "No author metadata found; refusing to sign."
-            res["warning"] = "❌ Missing author metadata"
+            res["warning"] = "Missing author metadata"
             return res
 
         # Strict rule: only author may sign (match by last-8 or full)
         if not (_endswith8(signer_fpr, author_fpr) or _endswith8(author_fpr, signer_fpr)):
             res["status"] = "Signer is not the author; refusing to sign."
-            res["warning"] = "❌ Security rule: only the author may sign."
+            res["warning"] = "Security rule: only the author may sign."
             return res
 
         # Optional: also ensure author is listed among recipients
         recipients = meta["recipients"]
         if recipients and not any(_endswith8(signer_fpr, r) for r in recipients):
             res["status"] = "Author not listed among recipients; refusing to sign."
-            res["warning"] = "❌ Author FPR not in recipients"
+            res["warning"] = "Author FPR not in recipients"
             return res
 
         # get passphrase if required (only for signing key)

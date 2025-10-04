@@ -8,11 +8,11 @@ def scan_qr_chunks_continuous(camera_index=0, timeout=120):
     Reads QR chunks continuously from a single webcam session.
     Handles multi-frame GIFs smoothly (no camera reopen).
     """
-    print("📷 Starting continuous QR scanner (press 'q' to cancel)...")
+    print("Starting continuous QR scanner (press 'q' to cancel)...")
 
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
-        print("❌ Cannot open webcam.")
+        print("Cannot open webcam.")
         return None
 
     start_time = time.time()
@@ -41,27 +41,27 @@ def scan_qr_chunks_continuous(camera_index=0, timeout=120):
                     body = "\n".join(lines[1:])
                     if index not in chunks:
                         chunks[index] = body
-                        print(f"✅ Got chunk {index}/{total}")
+                        print(f"Got chunk {index}/{total}")
                         last_seen = time.time()
                 except Exception:
-                    print("⚠️ Invalid CHUNK header:", header)
+                    print("Invalid CHUNK header:", header)
                     continue
             else:
                 cap.release()
                 cv2.destroyAllWindows()
-                print("✅ Single QR detected.")
+                print("Single QR detected.")
                 return data
 
         # Check completion
         if total and len(chunks) == total:
             cap.release()
             cv2.destroyAllWindows()
-            print(f"🎞️ All {total} chunks received successfully.")
+            print(f"All {total} chunks received successfully.")
             ordered = "".join(chunks[i] for i in range(1, total + 1))
             return ordered
 
         # Show live feed in one window
-        status = f"📦 {len(chunks)}/{total or '?'} chunks"
+        status = f"{len(chunks)}/{total or '?'} chunks"
         cv2.putText(frame, status, (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
         cv2.imshow("ChatGPG QR Scanner", frame)
@@ -73,12 +73,12 @@ def scan_qr_chunks_continuous(camera_index=0, timeout=120):
 
         # Timeout only if no new chunk in 15s
         if time.time() - last_seen > 15:
-            print("\n⏹️ Timeout — no new chunks detected.")
+            print("\nTimeout — no new chunks detected.")
             break
 
     cap.release()
     cv2.destroyAllWindows()
-    print("⏹️ Incomplete transfer.")
+    print("Incomplete transfer.")
     return None
 
 
@@ -93,7 +93,7 @@ def scan_qr(settings):
         try:
             from picamera2 import Picamera2
         except ImportError:
-            print("⚠️ picamera2 not available. Falling back to webcam.")
+            print("picamera2 not available. Falling back to webcam.")
             return scan_qr_chunks_continuous()
         return scan_qr_zerocam_continuous()
     else:
@@ -108,7 +108,7 @@ def scan_qr_zerocam_continuous(timeout=120):
     try:
         from picamera2 import Picamera2
     except ImportError:
-        print("❌ picamera2 not installed.")
+        print("picamera2 not installed.")
         return None
 
     print("[INFO] Starting continuous Pi Zero QR scanner...")
@@ -139,29 +139,29 @@ def scan_qr_zerocam_continuous(timeout=120):
                     body = "\n".join(lines[1:])
                     if index not in chunks:
                         chunks[index] = body
-                        print(f"✅ Got chunk {index}/{total}")
+                        print(f"Got chunk {index}/{total}")
                         last_seen = time.time()
                 except Exception:
-                    print("⚠️ Invalid CHUNK header:", header)
+                    print("Invalid CHUNK header:", header)
                     continue
             else:
                 cam.stop()
-                print("✅ Single QR detected.")
+                print("Single QR detected.")
                 return data
 
         # Done?
         if total and len(chunks) == total:
             cam.stop()
-            print(f"🎞️ All {total} chunks received successfully.")
+            print(f"All {total} chunks received successfully.")
             ordered = "".join(chunks[i] for i in range(1, total + 1))
             return ordered
 
         if time.time() - last_seen > 15:
-            print("\n⏹️ Timeout — no new chunks detected.")
+            print("\nTimeout — no new chunks detected.")
             break
 
         time.sleep(0.05)
 
     cam.stop()
-    print("⏹️ Incomplete transfer.")
+    print("Incomplete transfer.")
     return None

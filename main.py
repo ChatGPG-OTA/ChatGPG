@@ -1,6 +1,5 @@
-# main.py
 """
-ChatGPG / Pi-GPG
+ChatGPG
 ================
 
 Ephemeral air-gapped GPG signer for Raspberry Pi Zero or desktop emulator.
@@ -57,7 +56,7 @@ def get_display(settings):
 # INITIALIZATION
 # -------------------------------------------------------------
 def init():
-    print("🔐 Initializing ChatGPG environment...")
+    print("Initializing ChatGPG environment...")
 
     # 1. Ensure temporary GPG home (RAM)
     gpg = EphemeralGPG()
@@ -84,7 +83,7 @@ if __name__ == "__main__":
     try:
         main_menu(display, gpg, settings)
     except KeyboardInterrupt:
-        display.text("🧹 Exiting & wiping RAM...")
+        display.text("Exiting & wiping RAM...")
         try:
             gpg._cleanup()
         except Exception as e:
