@@ -203,15 +203,6 @@ class EphemeralGPG:
             out["decrypted_with"] = dec.get("key_used") or list(self.keys.values())[0]["fpr"]
             print(f"[DEBUG] Assuming recipient because decrypt OK. Using key: {out['decrypted_with'][-8:]}")
 
-            if dec["key_used"]:
-                print(f"[DEBUG] Message decrypted with key: {dec['key_used']}")
-                keyid8 = _short8(dec["key_used"])
-                for meta in self.keys.values():
-                    fpr = meta["fpr"]
-                    if _endswith8(fpr, keyid8) or keyid8 in fpr:
-                        out["is_recipient"] = True
-                        break
-
             # Determine if it’s unsigned inside
             if "BEGIN PGP SIGNED MESSAGE" in dec["plaintext"]:
                 out["type"] = "encrypted_signed"
