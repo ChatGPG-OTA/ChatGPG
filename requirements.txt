@@ -1,0 +1,22 @@
+# === Core GPG logic ===
+python-gnupg>=0.5.2
+
+# === QR generation ===
+segno>=1.6.1
+
+# === Image / display rendering ===
+Pillow>=10.0.0
+
+# === LCD display hardware (Waveshare ST7789 240x240) ===
+luma.lcd>=2.10.0
+RPi.GPIO>=0.7.1
+spidev>=3.6
+
+# === QR decoding for Pi camera ===
+zbarlight>=3.0
+
+# === Camera interface for Pi Zero ===
+picamera2>=0.3.12
+
+# === Optional: debug tools ===
+colorama>=0.4.6

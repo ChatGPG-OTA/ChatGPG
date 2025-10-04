@@ -1,0 +1,12 @@
+# === Core GPG logic ===
+python-gnupg>=0.5.2
+
+# === QR generation ===
+segno>=1.6.1
+
+# === Image rendering for virtual display ===
+Pillow>=10.0.0
+
+# === Webcam QR scanning ===
+opencv-python>=4.10.0.84
+pyzbar>=0.1.9
