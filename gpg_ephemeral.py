@@ -191,9 +191,9 @@ class EphemeralGPG:
 
     def sign_and_encrypt_message(self, message: str, signer_fpr: str, recipients: List[str], passphrase: Optional[str] = None) -> str:
         """
-        (Opțional) Clearsign + re-encrypt pentru o listă dată de destinatari.
-        Folosește DOAR dacă știi explicit destinatarii. Pentru păstrarea destinatarilor
-        originali ai mesajului, preferă sign_ciphertext().
+        (Optional) Clearsign + re-encrypt for a given list of recipients.
+        Use ONLY if you explicitly know the recipients. To preserve the original recipients
+        of the message, prefer sign_ciphertext().
         """
         key_full = signer_fpr if len(signer_fpr) > 8 else self.keys[signer_fpr]["fpr"]
         signed = self.gpg.sign(message, keyid=key_full, passphrase=passphrase, clearsign=True)
