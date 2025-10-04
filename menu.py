@@ -93,11 +93,19 @@ def scan_menu(display, gpg, settings):
     # Show decrypted/plain preview if any
     if result.get("plaintext"):
         preview = shorten(result["plaintext"].strip(), width=100, placeholder="…")
-        display.text("Message Preview:")
-        display.text(preview)
-        print("\n--- FULL DECRYPTED MESSAGE ---\n")
-        print(result["plaintext"])
-        print("\n------------------------------\n")
+
+        if not result.get("decryption_failed"):
+            display.text("Message Preview:")
+            display.text(preview)
+            print("\n--- FULL DECRYPTED MESSAGE ---\n")
+            print(result["plaintext"])
+            print("\n------------------------------\n")
+
+        else:
+            display.text("Encrypted message could not be decrypted.")
+            status = result.get("decryption_status") or "Unknown error"
+            display.text(f"Reason: {status}")
+            display.text("Try re-importing your private key or entering the correct passphrase.")
 
     # ---- Decision tree ----
 
@@ -186,8 +194,9 @@ def keys_menu(display, gpg):
         display.text("Keys Menu")
         display.text("1) List Keys")
         display.text("2) Generate New Key")
-        display.text("3) Delete Key")
-        display.text("4) ⬅ Back")
+        display.text("3) Test Passphrase")
+        display.text("4) Delete Key")
+        display.text("5) ⬅ Back")
         choice = input("Select: ").strip()
 
         # === List keys ===
@@ -212,12 +221,45 @@ def keys_menu(display, gpg):
             fpr = gpg.generate_key(name, email, pw)
             if fpr:
                 display.text(f"Key created: ...{fpr[-8:]}")
+                print("Exporting keypair...")
+
+                try:
+                    pub_ascii, priv_ascii = gpg.export_keypair_ascii(fpr, passphrase=pw)
+                    from qr_utils import qr_animate
+                    qr_animate(display, priv_ascii)
+                    qr_animate(display, pub_ascii)
+                    display.text("QR backup complete.")
+                except Exception as e:
+                    display.text(f"Export failed: {e}")
             else:
                 display.text("Key generation failed.")
             input("Press Enter...")
 
-        # === Delete ===
         elif choice == "3":
+            display.clear()
+            if not gpg.keys:
+                display.text("No private keys loaded.")
+                input("Press Enter...")
+                continue
+
+            for short, meta in gpg.keys.items():
+                display.text(f"{short} | {meta['name']} <{meta['email']}>")
+
+            keyid = input("Enter key (last 8 chars): ").strip().upper()
+            pw = input("Enter passphrase (leave empty to test none): ") or None
+
+            try:
+                test_msg = "TEST_SIGN"
+                res = gpg.gpg.sign(test_msg, keyid=keyid, passphrase=pw, clearsign=True)
+                print("Result:", "OK" if res.data else "FAIL")
+                print("Status:", res.status or res.stderr)
+            except Exception as e:
+                print("ERROR:", e)
+
+            input("Press Enter...")
+
+        # === Delete ===
+        elif choice == "4":
             display.clear()
             if not gpg.keys:
                 display.text("No keys available to delete.")
@@ -241,7 +283,7 @@ def keys_menu(display, gpg):
                 display.text("Cancelled.")
             input("Press Enter...")
 
-        elif choice in ("4", "b", "B"):
+        elif choice in ("5", "b", "B"):
             return
         else:
             display.text("Invalid option.")

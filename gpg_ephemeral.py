@@ -11,10 +11,12 @@ Ephemeral GPG manager for ChatGPG (final clean version)
 import gnupg
 import tempfile
 import shutil
+import subprocess
 import atexit
 import os
 import re
 from typing import Optional, Dict, List, Callable
+import textwrap
 
 DECRYPT_KEY_RE = re.compile(r'key,?\s*(?:ID|id)?\s*([A-Fa-f0-9]{8,40})')
 
@@ -39,6 +41,7 @@ def _undash_clearsign_payload(text: str) -> str:
 
 class EphemeralGPG:
     def __init__(self, gpg_home: Optional[str] = None, use_ram: bool = True):
+
         if gpg_home:
             os.makedirs(gpg_home, exist_ok=True)
             self.gpg_home = gpg_home
@@ -48,39 +51,86 @@ class EphemeralGPG:
             self.gpg_home = tempfile.mkdtemp(prefix="gpg_", dir=tmpdir_base)
             self._cleanup_on_exit = True
 
-        self.gpg = gnupg.GPG(gnupghome=self.gpg_home)
+        # Write GPG config (main)
+        with open(os.path.join(self.gpg_home, "gpg.conf"), "w") as f:
+            f.write(textwrap.dedent("""\
+            use-agent
+            no-tty
+            """))
+
+        # Write GPG agent config (loopback)
+        agent_conf_path = os.path.join(self.gpg_home, "gpg-agent.conf")
+        with open(agent_conf_path, "w") as f:
+            f.write("allow-loopback-pinentry\n")
+
+        # Reload agent to apply settings
+        os.system(f"gpgconf --homedir {self.gpg_home} --kill gpg-agent >/dev/null 2>&1")
+
+        # Initialize GPG engine
+        self.gpg = gnupg.GPG(
+            gnupghome=self.gpg_home,
+            options=["--pinentry-mode", "loopback"]
+        )
+
         self.keys: Dict[str, Dict] = {}
 
         if self._cleanup_on_exit:
             atexit.register(self._cleanup)
 
+
+
     # =========================
     # Key Management
     # =========================
     def generate_key(self, name: str, email: str, passphrase: Optional[str] = None,
-                     key_type="RSA", key_length=2048, expire_date=0) -> Optional[str]:
-        params = self.gpg.gen_key_input(
-            name_real=name,
-            name_email=email,
-            passphrase=passphrase,
-            key_type=key_type,
-            key_length=key_length,
-            expire_date=expire_date
-        )
+                 key_type="RSA", key_length=2048, expire_date=0) -> Optional[str]:
+
+        if passphrase:
+            params = self.gpg.gen_key_input(
+                name_real=name,
+                name_email=email,
+                passphrase=passphrase,
+                key_type=key_type,
+                key_length=key_length,
+                expire_date=expire_date
+            )
+        else:
+            params = self.gpg.gen_key_input(
+                name_real=name,
+                name_email=email,
+                key_type=key_type,
+                key_length=key_length,
+                expire_date=expire_date,
+                no_protection=True
+            )
         key = self.gpg.gen_key(params)
         fpr = str(key)
+
         if not fpr:
             return None
+
         self.keys[_short8(fpr)] = {
             "fpr": fpr,
             "name": name,
             "email": email,
             "has_passphrase": bool(passphrase)
         }
+
         return fpr
 
     def import_public_key(self, armored: str) -> Dict:
         res = self.gpg.import_keys(armored)
+        for r in res.results:
+            fpr = r.get("fingerprint")
+            if fpr:
+                short = _short8(fpr)
+                self.keys[short] = {
+                    "fpr": fpr,
+                    "name": "Imported",
+                    "email": "",
+                    "has_passphrase": False
+                }
+
         return res
 
     def import_private_key(self, armored: str) -> Dict:
@@ -253,16 +303,18 @@ class EphemeralGPG:
 
             # If payload itself is an encrypted PGP message, try to decrypt it
             if "BEGIN PGP MESSAGE" in signed_payload and self.keys:
-                dec = self.decrypt(signed_payload)
-                if not dec["ok"] and any(k["has_passphrase"] for k in self.keys.values()) and ask_passphrase_fn:
-                    pw = ask_passphrase_fn("Enter passphrase (or empty): ")
-                    if pw:
-                        dec = self.decrypt(signed_payload, passphrase=pw)
+                pw = ask_passphrase_fn("Enter passphrase (or empty): ")
+                dec = self.decrypt(signed_payload, passphrase=pw or None)
+                print(dec)
+
                 if dec["ok"]:
                     out["is_recipient"] = True
                     out["decrypted_with"] = dec.get("key_used")
                     out["plaintext"] = dec["plaintext"]
                     out["type"] = "signed_ciphertext"
+                else:
+                    out["decryption_failed"] = True
+                    out["decryption_status"] = dec["status"]
             return out
 
         # --- Encrypted message ---
@@ -309,6 +361,36 @@ class EphemeralGPG:
         out["plaintext"] = armored_text
         out["warning"] = "Unknown PGP block"
         return out
+
+    def export_keypair_ascii(self, fpr: str, passphrase: Optional[str] = None) -> tuple[str, str]:
+        """Export public + private keys in ASCII armor using python-gnupg's safe API."""
+        # Public key is always easy
+        pub_ascii = self.gpg.export_keys(fpr, armor=True)
+
+        # Private key export — with or without passphrase
+        try:
+            if passphrase:
+                priv_ascii = self.gpg.export_keys(
+                    fpr,
+                    secret=True,
+                    armor=True,
+                    passphrase=passphrase,
+                    expect_passphrase=True,
+                )
+            else:
+                priv_ascii = self.gpg.export_keys(
+                    fpr,
+                    secret=True,
+                    armor=True,
+                    expect_passphrase=False,
+                )
+        except Exception as e:
+            raise RuntimeError(f"Secret key export failed: {e}")
+
+        if not priv_ascii.strip():
+            raise RuntimeError("Empty private key export output")
+
+        return pub_ascii.strip(), priv_ascii.strip()
 
     # =========================
     # Cleanup
