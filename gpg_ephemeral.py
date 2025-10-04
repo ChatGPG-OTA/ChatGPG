@@ -71,6 +71,10 @@ class EphemeralGPG:
         }
         return fpr
 
+    def import_public_key(self, armored: str) -> Dict:
+        res = self.gpg.import_keys(armored)
+        return res
+
     def import_private_key(self, armored: str) -> Dict:
         res = self.gpg.import_keys(armored)
         for r in res.results:

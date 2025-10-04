@@ -78,6 +78,12 @@ def scan_menu(display, gpg, settings):
         display.text("Private key imported successfully.")
         sleep(1.5)
         return
+    elif "PUBLIC KEY BLOCK" in data:
+        display.text("Importing public key...")
+        gpg.import_public_key(data)
+        display.text("Public key imported successfully.")
+        sleep(1.0)
+        return
 
     # --- Message handling ---
     result = gpg.process_scanned(data, ask_passphrase_fn=input)
@@ -199,10 +205,10 @@ def scan_menu(display, gpg, settings):
         if result.get("signer_fpr"):
             display.text(f"Signer: ...{result['signer_fpr'][-8:]}")
         if result.get("signature_valid") is not None:
-            valid = "(valid)" if result["signature_valid"] else "(invalid)"
-            display.text(f"Signature: {valid}")
-        if result.get("warning"):
-            display.text(result["warning"])
+            ok_txt = "(valid)" if result["signature_valid"] else "(invalid)"
+            display.text(f"Signature: {ok_txt}")
+        if result.get("status"):
+            display.text(result["status"])  # ex: "No public key"
         input("Press Enter to go back...")
         return
 
