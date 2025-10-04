@@ -23,10 +23,18 @@ def _short8(fp: str) -> str:
     return fp[-8:].upper() if fp else ""
 
 
-def _endswith8(a: str, b: str) -> bool:
-    if not a or not b:
-        return False
-    return a[-8:].upper() == b[-8:].upper()
+def _undash_clearsign_payload(text: str) -> str:
+    """
+    In clearsigned text, lines starting with '- ' are dash-escaped.
+    This removes the leading '- ' so that inner PGP blocks are intact.
+    """
+    out_lines = []
+    for ln in text.splitlines():
+        if ln.startswith('- '):
+            out_lines.append(ln[2:])
+        else:
+            out_lines.append(ln)
+    return "\n".join(out_lines)
 
 
 class EphemeralGPG:
@@ -92,15 +100,40 @@ class EphemeralGPG:
     def list_keys(self) -> Dict[str, Dict]:
         return self.keys
 
-    # =========================
-    # Core Crypto
-    # =========================
-    def encrypt_to_recipients(self, plaintext: str, recipients: List[str]) -> str:
-        res = self.gpg.encrypt(plaintext, recipients, always_trust=True, armor=True)
-        if not res.ok:
-            raise RuntimeError(f"GPG encrypt failed: {res.status}")
-        return str(res)
+    def delete_key_by_shortid(self, shortid: str) -> bool:
+        """Delete keypair (public + private) by last 8 chars, tolerant to GPG quirks."""
+        shortid = shortid.upper()
+        target = None
+        for short, meta in list(self.keys.items()):
+            if short == shortid or meta["fpr"][-8:].upper() == shortid:
+                target = meta["fpr"]
+                del self.keys[short]
+                break
 
+        if not target:
+            return False
+
+        try:
+            # Delete public key first (no passphrase required)
+            self.gpg.delete_keys(target)
+        except Exception as e:
+            print(f"[WARN] Failed to delete public key {target}: {e}")
+
+        try:
+            # Try deleting secret key, but ignore failure due to dummy passphrase requirement
+            self.gpg.delete_keys(target, secret=True)
+        except Exception as e:
+            if "passphrase" in str(e).lower():
+                print(f"[INFO] Secret key {target} retained (GPG requires passphrase).")
+            else:
+                print(f"[WARN] Failed to delete secret key {target}: {e}")
+
+        print(f"[GPG] Deleted key {target} (public, secret optional)")
+        return True
+
+    # =========================
+    # Crypto Operations
+    # =========================
     def decrypt(self, armored_text: str, passphrase: Optional[str] = None) -> Dict:
         dec = self.gpg.decrypt(armored_text, passphrase=passphrase)
         ok = bool(getattr(dec, "ok", False))
@@ -130,11 +163,47 @@ class EphemeralGPG:
         }
 
     def sign_message(self, message: str, signer_fpr: str, passphrase: Optional[str] = None) -> str:
+        """Clearsign plaintext message."""
         key_full = signer_fpr if len(signer_fpr) > 8 else self.keys[signer_fpr]["fpr"]
         sig = self.gpg.sign(message, keyid=key_full, passphrase=passphrase, clearsign=True)
         if not getattr(sig, "data", None):
             raise RuntimeError(f"Signing failed: {getattr(sig, 'status', '')}")
         return str(sig)
+
+    def sign_ciphertext(self, armored_ciphertext: str, signer_short8: str,
+                        ask_passphrase_fn: Optional[Callable[[str], Optional[str]]] = None) -> str:
+        """
+        Clearsign the ORIGINAL encrypted PGP block, preserving recipients.
+        """
+        key_meta = self.keys.get(signer_short8)
+        if not key_meta:
+            raise RuntimeError("Signing key not found in ephemeral keyring.")
+        key_full = key_meta["fpr"]
+
+        pw = None
+        if key_meta.get("has_passphrase") and ask_passphrase_fn:
+            pw = ask_passphrase_fn("Enter passphrase for signing key: ")
+
+        sig = self.gpg.sign(armored_ciphertext, keyid=key_full, passphrase=pw, clearsign=True)
+        if not getattr(sig, "data", None):
+            raise RuntimeError(f"Signing failed: {getattr(sig, 'status', '')}")
+        return str(sig)
+
+    def sign_and_encrypt_message(self, message: str, signer_fpr: str, recipients: List[str], passphrase: Optional[str] = None) -> str:
+        """
+        (Opțional) Clearsign + re-encrypt pentru o listă dată de destinatari.
+        Folosește DOAR dacă știi explicit destinatarii. Pentru păstrarea destinatarilor
+        originali ai mesajului, preferă sign_ciphertext().
+        """
+        key_full = signer_fpr if len(signer_fpr) > 8 else self.keys[signer_fpr]["fpr"]
+        signed = self.gpg.sign(message, keyid=key_full, passphrase=passphrase, clearsign=True)
+        if not getattr(signed, "data", None):
+            raise RuntimeError(f"Signing failed: {getattr(signed, 'status', '')}")
+
+        encrypted = self.gpg.encrypt(str(signed), recipients, always_trust=True, armor=True)
+        if not encrypted.ok:
+            raise RuntimeError(f"Encrypt failed: {encrypted.status}")
+        return str(encrypted)
 
     # =========================
     # Message Processing
@@ -165,16 +234,35 @@ class EphemeralGPG:
             out["status"] = "Public key block"
             return out
 
-        # --- Signed message ---
+        # --- Signed (clearsigned) ---
         if "BEGIN PGP SIGNED MESSAGE" in armored_text:
             out["type"] = "signed"
             v = self.verify_clearsign(armored_text)
             out["signature_valid"] = v["valid"]
-            out["signer_fpr"] = v["fingerprint"]
+            out["signer_fpr"] = v["fingerprint"]  # may be None if pubkey missing
 
-            payload = armored_text.split("-----BEGIN PGP SIGNATURE-----")[0]
-            lines = [ln for ln in payload.splitlines() if not ln.startswith(("-----", "Hash:"))]
-            out["plaintext"] = "\n".join(lines).strip()
+            # Extract payload: after "Hash:..." blank line until signature block
+            head, _, rest = armored_text.partition("\n\n")
+            body = armored_text
+            if rest:
+                # everything before signature block
+                body = rest.split("-----BEGIN PGP SIGNATURE-----")[0]
+            # Undash-escape so inner PGP blocks remain valid
+            signed_payload = _undash_clearsign_payload(body).strip()
+            out["plaintext"] = signed_payload
+
+            # If payload itself is an encrypted PGP message, try to decrypt it
+            if "BEGIN PGP MESSAGE" in signed_payload and self.keys:
+                dec = self.decrypt(signed_payload)
+                if not dec["ok"] and any(k["has_passphrase"] for k in self.keys.values()) and ask_passphrase_fn:
+                    pw = ask_passphrase_fn("Enter passphrase (or empty): ")
+                    if pw:
+                        dec = self.decrypt(signed_payload, passphrase=pw)
+                if dec["ok"]:
+                    out["is_recipient"] = True
+                    out["decrypted_with"] = dec.get("key_used")
+                    out["plaintext"] = dec["plaintext"]
+                    out["type"] = "signed_ciphertext"
             return out
 
         # --- Encrypted message ---
@@ -201,18 +289,13 @@ class EphemeralGPG:
 
             out["plaintext"] = dec["plaintext"]
             out["status"] = "Decryption OK"
-
-            # Even if gnupg misreports key_id, we know we’re one of the recipients.
             out["is_recipient"] = True
             out["decrypted_with"] = dec.get("key_used") or list(self.keys.values())[0]["fpr"]
-            print(f"[DEBUG] Assuming recipient because decrypt OK. Using key: {out['decrypted_with'][-8:]}")
 
-            # Determine if it’s unsigned inside
             if "BEGIN PGP SIGNED MESSAGE" in dec["plaintext"]:
                 out["type"] = "encrypted_signed"
             else:
                 out["type"] = "encrypted_unsigned"
-
             return out
 
         # --- Unsigned plaintext ---

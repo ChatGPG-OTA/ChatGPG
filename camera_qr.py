@@ -71,8 +71,7 @@ def scan_qr_chunks_continuous(camera_index=0, timeout=120):
             print("\n[INFO] User cancelled.")
             break
 
-        # Timeout only if no new chunk in 15s
-        if time.time() - last_seen > 15:
+        if time.time() - last_seen > 60:
             print("\nTimeout — no new chunks detected.")
             break
 
@@ -156,7 +155,7 @@ def scan_qr_zerocam_continuous(timeout=120):
             ordered = "".join(chunks[i] for i in range(1, total + 1))
             return ordered
 
-        if time.time() - last_seen > 15:
+        if time.time() - last_seen > 60:
             print("\nTimeout — no new chunks detected.")
             break
 

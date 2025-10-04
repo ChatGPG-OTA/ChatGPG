@@ -9,9 +9,9 @@ Handles:
   - settings_menu()
 
 Features:
-  • Detects author/recipient roles
+  • Detects recipient role
   • Displays decrypted message before signing
-  • Only offers signing if we are the author
+  • Offers "Sign original ciphertext" to preserve recipients
   • Works on Pi LCD or virtual display
 """
 
@@ -71,7 +71,7 @@ def scan_menu(display, gpg, settings):
         sleep(1)
         return
 
-    # --- Key import (private only) ---
+    # --- Key import ---
     if "PRIVATE KEY BLOCK" in data:
         display.text("Importing private key...")
         gpg.import_private_key(data)
@@ -90,20 +90,7 @@ def scan_menu(display, gpg, settings):
     print(result)
     display.clear()
 
-    # ---- Summary display ----
-    if result.get("author_fpr"):
-        display.text(f"Author: ...{result['author_fpr'][-8:]}")
-
-    if result.get("recipients"):
-        rec_str = ", ".join(f"...{fp[-8:]}" for fp in result["recipients"])
-        display.text(f"Recipients: {rec_str}")
-
-    if result.get("is_author"):
-        display.text("You are the AUTHOR.")
-    if result.get("is_recipient"):
-        display.text("You are a RECIPIENT.")
-
-    # Show decrypted or plain text preview
+    # Show decrypted/plain preview if any
     if result.get("plaintext"):
         preview = shorten(result["plaintext"].strip(), width=100, placeholder="…")
         display.text("Message Preview:")
@@ -113,49 +100,8 @@ def scan_menu(display, gpg, settings):
         print("\n------------------------------\n")
 
     # ---- Decision tree ----
-    # If message should be signed (we are author)
-    if result.get("should_sign"):
-        display.text("Ready to sign this message.")
-        keys = gpg.list_keys()
-        if not keys:
-            display.text("No private keys available.")
-            input("Press Enter...")
-            return
 
-        for k in keys:
-            meta = gpg.keys[k]
-            label = f"{meta['name']} <{meta['email']}>"
-            display.text(f"- {k} | {label}")
-
-        choice = input("Sign with key (last 8 chars): ").strip()
-        res_sign = gpg.sign_unsigned_message(result["plaintext"], choice, ask_passphrase_fn=input)
-        display.clear()
-        if res_sign["ok"]:
-            display.text("Message signed successfully.")
-            from qr_utils import qr_animate
-            qr_animate(display, res_sign["signed_armored"])
-            display.text("Signed QR ready for scanning.")
-        else:
-            display.text(f"{res_sign['status']}")
-            if res_sign.get("warning"):
-                display.text(res_sign["warning"])
-        input("Press Enter to go back...")
-        return
-
-    # Signed message (verify)
-    if result["type"] in ("clearsigned", "encrypted_signed"):
-        display.text("Signed message detected.")
-        if result["signer_fpr"]:
-            display.text(f"Signer: ...{result['signer_fpr'][-8:]}")
-        if result["signature_valid"] is not None:
-            valid = "(yes)" if result["signature_valid"] else "(no)"
-            display.text(f"Signature: {valid}")
-        if result.get("warning"):
-            display.text(result["warning"])
-        input("Press Enter to go back...")
-        return
-
-    # Encrypted but cannot decrypt
+    # 1) Encrypted but cannot decrypt
     if result["type"] == "encrypted" and not result.get("plaintext"):
         display.text("Encrypted message (cannot decrypt).")
         if result.get("warning"):
@@ -163,11 +109,9 @@ def scan_menu(display, gpg, settings):
         input("Press Enter to go back...")
         return
 
-    # Plain unsigned message (not ours)
-    if result["type"] == "unsigned" and not result.get("should_sign"):
+    # 2) Unsigned plaintext
+    if result["type"] == "unsigned":
         display.text("Plain unsigned message.")
-        if result.get("warning"):
-            display.text(result["warning"])
         input("Press Enter to go back...")
         return
 
@@ -175,44 +119,58 @@ def scan_menu(display, gpg, settings):
     if result["type"] == "encrypted_unsigned":
         display.text("Decrypted unsigned message.")
         if result.get("is_recipient"):
-            display.text("You are the RECIPIENT.")
-            display.text("You may sign this message if you are the author.")
-            choice = input("Sign message? (y/n): ").strip().lower()
+            display.text("You are a recipient.")
+            choice = input("Sign the ORIGINAL encrypted message to preserve recipients? (y/n): ").strip().lower()[:1]
             if choice == "y":
+                # choose signing key
                 keys = gpg.list_keys()
+                if not keys:
+                    display.text("No private keys available.")
+                    input("Press Enter to go back...")
+                    return
                 for k in keys:
                     meta = gpg.keys[k]
                     label = f"{meta['name']} <{meta['email']}>"
                     display.text(f"- {k} | {label}")
-                choice = input("Sign with key (last 8 chars): ").strip()
-                res_sign = gpg.sign_message(result["plaintext"], choice, passphrase=None)
+                signer = input("Sign with key (last 8 chars): ").strip()
+
+                try:
+                    # IMPORTANT: sign the ORIGINAL encrypted blob to keep recipients
+                    signed_blob = gpg.sign_ciphertext(data, signer, ask_passphrase_fn=input)
+                except Exception as e:
+                    display.text(f"Signing failed: {e}")
+                    input("Press Enter to go back...")
+                    return
+
                 display.clear()
-                if res_sign:
-                    display.text("Message signed successfully.")
-                    from qr_utils import qr_animate
-                    qr_animate(display, res_sign)
-                    display.text("Signed QR ready for scanning.")
-                else:
-                    display.text("Signing failed.")
+                display.text("Message signed successfully.")
+                from qr_utils import qr_animate
+                qr_animate(display, signed_blob)
+                display.text("Signed QR ready for scanning.")
+                input("Press Enter to go back...")
+                return
+            else:
+                # user said no (or empty) → just return to menu without extra pause
+                return
         else:
             display.text("You are not a recipient for this message.")
-        input("Press Enter to go back...")
-        return
+            input("Press Enter to go back...")
+            return
 
-    # Signed message (clearsigned)
-    if result["type"] in ("signed", "clearsigned"):
+    # 4) Signed (clearsigned) or encrypted_signed
+    if result["type"] in ("signed", "signed_ciphertext", "encrypted_signed", "clearsigned"):
         display.text("Signed message detected.")
         if result.get("signer_fpr"):
             display.text(f"Signer: ...{result['signer_fpr'][-8:]}")
         if result.get("signature_valid") is not None:
             ok_txt = "(valid)" if result["signature_valid"] else "(invalid)"
             display.text(f"Signature: {ok_txt}")
-        if result.get("status"):
-            display.text(result["status"])  # ex: "No public key"
+        if result.get("warning"):
+            display.text(result["warning"])
         input("Press Enter to go back...")
         return
 
-    # Fallback
+    # 5) Fallback
     display.text("Unknown message type.")
     if result.get("warning"):
         display.text(result["warning"])
@@ -228,9 +186,11 @@ def keys_menu(display, gpg):
         display.text("Keys Menu")
         display.text("1) List Keys")
         display.text("2) Generate New Key")
-        display.text("3) ⬅ Back")
+        display.text("3) Delete Key")
+        display.text("4) ⬅ Back")
         choice = input("Select: ").strip()
 
+        # === List keys ===
         if choice == "1":
             display.clear()
             if not gpg.keys:
@@ -241,6 +201,8 @@ def keys_menu(display, gpg):
                     label = f"{meta['name']} <{meta['email']}>"
                     display.text(f"{short} | {label}")
             input("Press Enter...")
+
+        # === Generate new ===
         elif choice == "2":
             display.clear()
             name = input("Name: ")
@@ -253,7 +215,33 @@ def keys_menu(display, gpg):
             else:
                 display.text("Key generation failed.")
             input("Press Enter...")
-        elif choice in ("3", "b", "B"):
+
+        # === Delete ===
+        elif choice == "3":
+            display.clear()
+            if not gpg.keys:
+                display.text("No keys available to delete.")
+                input("Press Enter...")
+                continue
+
+            display.text("Available keys:")
+            for short, meta in gpg.keys.items():
+                label = f"{meta['name']} <{meta['email']}>"
+                display.text(f"{short} | {label}")
+
+            keyid = input("Enter last 8 chars of key to delete: ").strip().upper()
+            confirm = input(f"Delete key ...{keyid}? (y/n): ").strip().lower()
+            if confirm == "y":
+                success = gpg.delete_key_by_shortid(keyid)
+                if success:
+                    display.text(f"Key ...{keyid} deleted (public ok).")
+                else:
+                    display.text(f"Key ...{keyid} not found or locked.")
+            else:
+                display.text("Cancelled.")
+            input("Press Enter...")
+
+        elif choice in ("4", "b", "B"):
             return
         else:
             display.text("Invalid option.")
