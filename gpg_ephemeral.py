@@ -151,7 +151,7 @@ class EphemeralGPG:
         return self.keys
 
     def delete_key_by_shortid(self, shortid: str) -> bool:
-        """Delete keypair (public + private) by last 8 chars, tolerant to GPG quirks."""
+        """Delete keypair by last 8 chars, tolerant to GPG quirks."""
         shortid = shortid.upper()
         target = None
         for short, meta in list(self.keys.items()):
@@ -163,22 +163,9 @@ class EphemeralGPG:
         if not target:
             return False
 
-        try:
-            # Delete public key first (no passphrase required)
-            self.gpg.delete_keys(target)
-        except Exception as e:
-            print(f"[WARN] Failed to delete public key {target}: {e}")
+        self.gpg.delete_keys(target, secret=True)
 
-        try:
-            # Try deleting secret key, but ignore failure due to dummy passphrase requirement
-            self.gpg.delete_keys(target, secret=True)
-        except Exception as e:
-            if "passphrase" in str(e).lower():
-                print(f"[INFO] Secret key {target} retained (GPG requires passphrase).")
-            else:
-                print(f"[WARN] Failed to delete secret key {target}: {e}")
-
-        print(f"[GPG] Deleted key {target} (public, secret optional)")
+        print(f"[GPG] Deleted key {target}")
         return True
 
     # =========================

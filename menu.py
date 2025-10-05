@@ -252,7 +252,8 @@ def keys_menu(display, gpg):
                 display.text(f"{short} | {meta['name']} <{meta['email']}>")
 
             keyid = input("Enter key (last 8 chars): ").strip().upper()
-            pw = input("Enter passphrase (leave empty to test none): ") or None
+            # pw = input("Enter passphrase (leave empty to test none): ") or None
+            pw = safe_ask_passphrase("Enter passphrase for signing key (leave empty to test none): ")
 
             try:
                 test_msg = "TEST_SIGN"
